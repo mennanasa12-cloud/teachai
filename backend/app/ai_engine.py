@@ -54,8 +54,8 @@ if not os.getenv("GROQ_API_KEY"):
 # LLM Setup + Router
 # ═══════════════════════════════════════════════════════════
 
-llm_primary = ChatGroq(model="openai/gpt-oss-20b", temperature=0, max_tokens=8192)
-llm_fallback = ChatGroq(model="openai/gpt-oss-120b", temperature=0, max_tokens=8192)
+llm_primary = ChatGroq(model="openai/gpt-oss-20b", temperature=0.7, max_tokens=8192)
+llm_fallback = ChatGroq(model="openai/gpt-oss-120b", temperature=0.7, max_tokens=8192)
 
 
 class LLMRouter:
@@ -96,6 +96,7 @@ lesson_plan_parser = PydanticOutputParser(pydantic_object=LessonPlanOutput)
 lesson_plan_prompt = PromptTemplate(
     template=(
         "You are an expert curriculum designer. Create a detailed lesson plan.\n"
+        "Use every supplied input to make this plan specific and distinct. Do not return a generic or previously used plan.\n"
         "Subject: {subject}\n"
         "Grade Level: {grade_level}\n"
         "Topic: {topic}\n"
