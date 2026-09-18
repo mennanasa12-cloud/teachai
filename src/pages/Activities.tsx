@@ -1,28 +1,35 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { generateActivity } from '../lib/api';
+import type { ActivityOutput, ActivityType } from '../lib/type';
 
 const ACTIVITY_TYPES = ['Group Activity', 'Discussion', 'Game', 'Problem Solving', 'Creative Activity'];
-
-const GENERATED_ACTIVITY = {
-  title: 'Photosynthesis Role Play',
-  type: 'Group Activity',
-  duration: '30 minutes',
-  goal: 'Students will understand the role of each component in photosynthesis by acting out the process as living "molecules."',
-  materials: ['Role cards (CO₂, H₂O, Sunlight, Chlorophyll, Glucose, O₂)', 'Large open space or classroom floor', 'Green and yellow construction paper', 'Timer'],
-  instructions: [
-    { step: 1, title: 'Setup (3 min)', desc: 'Assign each student a role: CO₂ molecule, water molecule, sunlight photon, chlorophyll, glucose, or oxygen. Give them role cards and a brief description.' },
-    { step: 2, title: 'The Reaction (10 min)', desc: '"CO₂" and "H₂O" students gather in the "leaf zone." "Sunlight" students tag the CO₂ and H₂O to trigger the reaction. Students then transform into "Glucose" and "O₂" and move to their designated areas.' },
-    { step: 3, title: 'Repeat & Discuss (10 min)', desc: 'Repeat the process 3 times with different students taking different roles. Ask: "What happens if there\'s no sunlight? What if water is removed?"' },
-    { step: 4, title: 'Debrief (7 min)', desc: 'Class discussion. Each student explains their role. Teacher draws the equation on the board as students identify where they fit in.' },
-  ],
-  learningOutcome: 'Students can explain the photosynthesis process from memory, identify all inputs and outputs, and describe what each component does.',
-};
 
 export default function Activities() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ subject: 'Science', grade: 'Grade 7', topic: 'Photosynthesis', duration: '30', type: 'Group Activity' });
-  const [generated, setGenerated] = useState(false);
+  const [result, setResult] = useState<ActivityOutput | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      setResult(await generateActivity({
+        subject: form.subject,
+        grade_level: form.grade,
+        duration_minutes: parseInt(form.duration) || 30,
+        topic: form.topic,
+        activity_type: form.type as ActivityType,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col lg:flex-row" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -79,7 +86,7 @@ export default function Activities() {
             </div>
           </div>
 
-          <button onClick={async () => { setLoading(true); await new Promise(r => setTimeout(r, 1800)); setLoading(false); setGenerated(true); }}
+          <button onClick={handleGenerate}
             disabled={loading}
             className="generate-btn w-full text-white font-bold py-3.5 rounded-2xl text-sm mt-5 flex items-center justify-center gap-2 disabled:opacity-70">
             {loading ? (
@@ -93,7 +100,7 @@ export default function Activities() {
 
       {/* Right */}
       <div className="flex-1 overflow-y-auto bg-slate-50">
-        {!generated && !loading ? (
+        {!result && !loading && !error ? (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
             <div className="w-16 h-16 bg-emerald-100 rounded-3xl flex items-center justify-center text-3xl mb-4">🎯</div>
             <h3 className="text-lg font-bold text-slate-700 mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Your activity will appear here</h3>
@@ -108,6 +115,12 @@ export default function Activities() {
                 <span key={i} className="thinking-dot w-2 h-2 bg-emerald-400 rounded-full block" style={{ animationDelay: `${i * 0.2}s` }} />
               ))}
             </div>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-3xl flex items-center justify-center text-3xl mb-4">⚠️</div>
+            <h3 className="text-lg font-bold text-slate-700 mb-2">Could not generate activity</h3>
+            <p className="text-slate-500 text-sm max-w-md break-words">{error}</p>
           </div>
         ) : (
           <div className="p-5 lg:p-8 max-w-3xl mx-auto">
@@ -126,10 +139,10 @@ export default function Activities() {
                 <div className="flex items-start gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">🎭</div>
                   <div>
-                    <h1 className="text-xl font-bold mb-1" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{GENERATED_ACTIVITY.title}</h1>
+                    <h1 className="text-xl font-bold mb-1" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{result?.title}</h1>
                     <div className="flex gap-2 mt-1">
-                      <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full">{GENERATED_ACTIVITY.type}</span>
-                      <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full">⏱ {GENERATED_ACTIVITY.duration}</span>
+                      <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full">{form.type}</span>
+                      <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full">⏱ {form.duration} minutes</span>
                     </div>
                   </div>
                 </div>
@@ -139,14 +152,14 @@ export default function Activities() {
                 {/* Goal */}
                 <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
                   <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-2">🎯 Goal</h3>
-                  <p className="text-sm text-slate-700 leading-relaxed">{GENERATED_ACTIVITY.goal}</p>
+                  <p className="text-sm text-slate-700 leading-relaxed">{result?.overview}</p>
                 </div>
 
                 {/* Materials */}
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 mb-2.5" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>📦 Materials Needed</h3>
                   <div className="grid grid-cols-2 gap-2">
-                    {GENERATED_ACTIVITY.materials.map((m, i) => (
+                    {result?.materials.map((m, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 rounded-xl px-3 py-2">
                         <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full flex-shrink-0" />
                         {m}
@@ -159,14 +172,13 @@ export default function Activities() {
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 mb-3" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>📋 Instructions</h3>
                   <div className="space-y-3">
-                    {GENERATED_ACTIVITY.instructions.map((ins) => (
-                      <div key={ins.step} className="flex gap-3">
+                    {result?.instructions.map((instruction, index) => (
+                      <div key={index} className="flex gap-3">
                         <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
-                          {ins.step}
+                          {index + 1}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-slate-800 mb-0.5" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{ins.title}</p>
-                          <p className="text-sm text-slate-600 leading-relaxed">{ins.desc}</p>
+                          <p className="text-sm text-slate-600 leading-relaxed">{instruction}</p>
                         </div>
                       </div>
                     ))}
@@ -176,7 +188,7 @@ export default function Activities() {
                 {/* Learning Outcome */}
                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
                   <h3 className="text-xs font-bold text-indigo-700 uppercase tracking-wide mb-2">🏆 Learning Outcome</h3>
-                  <p className="text-sm text-slate-700 leading-relaxed">{GENERATED_ACTIVITY.learningOutcome}</p>
+                  <p className="text-sm text-slate-700 leading-relaxed">{result?.wrap_up}</p>
                 </div>
               </div>
             </div>

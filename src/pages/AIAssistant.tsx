@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { askAssistant } from '../lib/api';
 
 interface Message {
   id: number;
@@ -14,55 +14,10 @@ const SUGGESTED_PROMPTS = [
   { icon: '🎯', title: 'Create a classroom activity', desc: 'Engaging and curriculum-aligned' },
   { icon: '❓', title: 'Generate quiz questions', desc: 'Multiple formats and difficulties' },
   { icon: '📊', title: 'Analyze student performance', desc: 'Get actionable insights' },
-  { icon: '📝', title: 'Write learning objectives', desc: 'Clear, measurable goals' },
+  { icon: '📝', title: 'Write learning objectives for Grade 7 Mathematics about fractions', desc: 'Clear, measurable goals' },
 ];
 
-const AI_RESPONSES: Record<string, string> = {
-  default: `Here's what I can help you with:
-
-**Lesson Planning** — Create detailed lesson plans with objectives, warm-ups, activities, and assessments for any subject and grade.
-
-**Quiz Generation** — Build quizzes with multiple choice, true/false, short answer, and essay questions.
-
-**Classroom Activities** — Design engaging group activities, games, discussions, and hands-on projects.
-
-**Student Support** — Get strategies to support diverse learners and address common misconceptions.
-
-What would you like to create today?`,
-  lesson: `Here's a complete **45-minute lesson plan on Photosynthesis** for Grade 7:
-
----
-
-**🎯 Learning Objectives**
-- Define photosynthesis and identify its key components
-- Explain the roles of chlorophyll, sunlight, water, and CO₂
-- Connect photosynthesis to food chains and ecosystems
-
-**⚡ Warm-Up (5 min)**
-Show two images: a wilting plant vs. a thriving plant. Ask: "What do you think makes the difference?"
-
-**📖 Introduction (10 min)**
-Direct instruction: Introduce the photosynthesis equation.
-6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂
-
-**🔬 Main Activity (20 min)**
-Students work in pairs to label an interactive diagram of a leaf cross-section, identifying chloroplasts, stomata, and vascular bundles.
-
-**💬 Discussion (5 min)**
-Class discussion: "Where does the energy in your food come from?" Trace it back to photosynthesis.
-
-**✅ Assessment (5 min)**
-Exit ticket: Students write 3 facts they learned about photosynthesis.
-
-**📚 Homework**
-Research: Find 2 examples of how photosynthesis affects daily life.
-
----
-*Want me to generate quiz questions or a worksheet for this lesson?*`,
-};
-
 export default function AIAssistant() {
-  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -84,16 +39,18 @@ export default function AIAssistant() {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setThinking(true);
-    await new Promise(r => setTimeout(r, 1500));
-
-    const lower = text.toLowerCase();
-    const response = lower.includes('lesson') || lower.includes('photosynthesis')
-      ? AI_RESPONSES.lesson
-      : AI_RESPONSES.default;
-
-    const aiMsg: Message = { id: Date.now() + 1, role: 'ai', content: response, timestamp: new Date() };
-    setThinking(false);
-    setMessages(prev => [...prev, aiMsg]);
+    try {
+      const response = await askAssistant({ message: text });
+      const content = response.response ?? (response.result
+        ? JSON.stringify(response.result, null, 2)
+        : 'I could not generate a response.');
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', content, timestamp: new Date() }]);
+    } catch (error) {
+      const content = error instanceof Error ? error.message : 'Something went wrong.';
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', content, timestamp: new Date() }]);
+    } finally {
+      setThinking(false);
+    }
   };
 
   const formatContent = (text: string) => {
@@ -160,7 +117,7 @@ export default function AIAssistant() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-2xl mb-8">
               {SUGGESTED_PROMPTS.map(p => (
-                <button key={p.title} onClick={() => sendMessage(p.title + ' for Grade 7')}
+                <button key={p.title} onClick={() => sendMessage(p.title)}
                   className="card-hover bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">
                   <span className="text-2xl mb-2 block">{p.icon}</span>
                   <p className="text-sm font-semibold text-slate-800 mb-0.5" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{p.title}</p>

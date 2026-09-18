@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router';
 import { useAuth } from '../context/AuthContext';
+import { healthCheck } from '../lib/api';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: GridIcon },
@@ -137,6 +138,37 @@ function Breadcrumbs() {
   );
 }
 
+function BackendStatus() {
+  const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      try {
+        await healthCheck();
+        if (active) setStatus('online');
+      } catch {
+        if (active) setStatus('offline');
+      }
+    };
+    check();
+    const timer = window.setInterval(check, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const styles = {
+    checking: 'bg-amber-50 text-amber-700',
+    online: 'bg-emerald-50 text-emerald-700',
+    offline: 'bg-red-50 text-red-700',
+  };
+  const labels = { checking: 'Checking AI backend', online: 'AI backend connected', offline: 'AI backend offline' };
+
+  return <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${styles[status]}`} title="Live status from the TeachAI API"><span className="w-1.5 h-1.5 rounded-full bg-current" />{labels[status]}</span>;
+}
+
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -260,6 +292,7 @@ export default function DashboardLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            <BackendStatus />
             <button className="relative p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors">
               <BellIcon />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />

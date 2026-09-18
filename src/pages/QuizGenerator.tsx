@@ -1,56 +1,28 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { generateQuiz } from '../lib/api';
 
-const GENERATED_QUIZ = [
-  {
-    id: 1, difficulty: 'Easy', type: 'Multiple Choice',
-    question: 'What is the primary source of energy for photosynthesis?',
-    options: ['Water', 'Carbon dioxide', 'Sunlight', 'Oxygen'],
-    correct: 2,
-    explanation: 'Sunlight provides the energy needed to drive the chemical reactions in photosynthesis.'
-  },
-  {
-    id: 2, difficulty: 'Medium', type: 'Multiple Choice',
-    question: 'Which organelle is responsible for carrying out photosynthesis in plant cells?',
-    options: ['Mitochondria', 'Chloroplast', 'Nucleus', 'Ribosome'],
-    correct: 1,
-    explanation: 'Chloroplasts contain chlorophyll, the pigment that absorbs light energy for photosynthesis.'
-  },
-  {
-    id: 3, difficulty: 'Medium', type: 'True/False',
-    question: 'Photosynthesis produces carbon dioxide as a byproduct.',
-    options: ['True', 'False'],
-    correct: 1,
-    explanation: 'False. Photosynthesis produces oxygen as a byproduct, and consumes carbon dioxide as a reactant.'
-  },
-  {
-    id: 4, difficulty: 'Hard', type: 'Multiple Choice',
-    question: 'Which of the following is the correct chemical equation for photosynthesis?',
-    options: [
-      '6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂',
-      'C₆H₁₂O₆ + 6O₂ → 6CO₂ + 6H₂O',
-      '6O₂ + 6H₂O → C₆H₁₂O₆ + 6CO₂',
-      '6CO₂ + 6O₂ → C₆H₁₂O₆ + 6H₂O'
-    ],
-    correct: 0,
-    explanation: 'The balanced equation shows CO₂ and water being converted to glucose and oxygen using light energy.'
-  },
-  {
-    id: 5, difficulty: 'Easy', type: 'Multiple Choice',
-    question: 'What green pigment in plants absorbs sunlight for photosynthesis?',
-    options: ['Carotene', 'Anthocyanin', 'Chlorophyll', 'Melanin'],
-    correct: 2,
-    explanation: 'Chlorophyll is the primary photosynthetic pigment, absorbing red and blue light wavelengths.'
-  },
-];
+type QuizCard = {
+  id: number;
+  difficulty: string;
+  type: string;
+  question: string;
+  options: string[];
+  correct: number;
+  explanation: string;
+};
 
 export default function QuizGenerator() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ subject: 'Science', grade: 'Grade 7', topic: 'Photosynthesis', difficulty: 'Mixed', count: '5', type: 'Multiple Choice' });
   const [generated, setGenerated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [quiz, setQuiz] = useState<QuizCard[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [saved, setSaved] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(false);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
 
   const diffBadge: Record<string, string> = {
     'Easy': 'bg-emerald-100 text-emerald-700',
@@ -100,7 +72,36 @@ export default function QuizGenerator() {
             ))}
           </div>
 
-          <button onClick={async () => { setLoading(true); await new Promise(r => setTimeout(r, 1800)); setLoading(false); setGenerated(true); }}
+          <button onClick={async () => {
+            setLoading(true);
+            setError(null);
+            setShowAnswers(false);
+            setSelectedAnswers({});
+            try {
+              const result = await generateQuiz({
+                subject: form.subject,
+                grade_level: form.grade,
+                topic: form.topic,
+                difficulty: form.difficulty,
+                number_of_questions: parseInt(form.count) || 5,
+                question_type: form.type,
+              });
+              setQuiz(result.questions.map((question, index) => ({
+                id: index + 1,
+                difficulty: form.difficulty === 'Mixed' ? 'Medium' : form.difficulty,
+                type: form.type,
+                question: question.question,
+                options: question.options ?? [question.correct_answer],
+                correct: Math.max(0, (question.options ?? [question.correct_answer]).indexOf(question.correct_answer)),
+                explanation: question.explanation ?? '',
+              })));
+              setGenerated(true);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'Something went wrong');
+            } finally {
+              setLoading(false);
+            }
+          }}
             disabled={loading}
             className="generate-btn w-full text-white font-bold py-3.5 rounded-2xl text-sm mt-5 flex items-center justify-center gap-2 disabled:opacity-70">
             {loading ? (
@@ -109,6 +110,7 @@ export default function QuizGenerator() {
               <><span>✨</span> Generate Quiz</>
             )}
           </button>
+          {error && <p className="mt-3 text-xs text-red-600 break-words">{error}</p>}
         </div>
       </div>
 
@@ -137,9 +139,13 @@ export default function QuizGenerator() {
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
                 <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">✓ AI Generated</span>
-                <span className="text-xs bg-slate-100 text-slate-600 font-medium px-2.5 py-1 rounded-full">{GENERATED_QUIZ.length} Questions</span>
+                <span className="text-xs bg-slate-100 text-slate-600 font-medium px-2.5 py-1 rounded-full">{quiz.length} Questions</span>
               </div>
               <div className="flex gap-2">
+                <button onClick={() => setShowAnswers(current => !current)}
+                  className="text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 bg-white px-3 py-1.5 rounded-lg transition-all">
+                  {showAnswers ? 'Hide Answer Key' : 'Show Answer Key'}
+                </button>
                 {[
                   { l: saved ? 'Saved ✓' : 'Save', onClick: () => setSaved(true) },
                   { l: 'Export PDF' },
@@ -156,8 +162,8 @@ export default function QuizGenerator() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="font-bold text-slate-900 text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Photosynthesis Quiz</h2>
-                  <p className="text-sm text-slate-500 mt-0.5">Grade 7 · Science · {GENERATED_QUIZ.length} Questions</p>
+                  <h2 className="font-bold text-slate-900 text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{form.topic} Quiz</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">{form.grade} · {form.subject} · {quiz.length} Questions</p>
                 </div>
                 <div className="text-sm font-medium text-slate-600 bg-slate-50 rounded-xl px-3 py-1.5">⏱ 20 min</div>
               </div>
@@ -165,7 +171,7 @@ export default function QuizGenerator() {
 
             {/* Questions */}
             <div className="space-y-4">
-              {GENERATED_QUIZ.map((q, qi) => (
+              {quiz.map((q, qi) => (
                 <div key={q.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden card-hover">
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3 mb-4">
@@ -183,26 +189,45 @@ export default function QuizGenerator() {
 
                     <div className="space-y-2">
                       {q.options.map((opt, oi) => (
-                        <div key={oi}
+                        <button key={oi} type="button"
+                          onClick={() => setSelectedAnswers(current => ({ ...current, [q.id]: oi }))}
                           className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-sm transition-all ${
-                            oi === q.correct
+                            (showAnswers || selectedAnswers[q.id] !== undefined) && oi === q.correct
                               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                              : selectedAnswers[q.id] === oi
+                                ? 'bg-rose-50 border-rose-200 text-rose-800'
                               : 'bg-slate-50 border-slate-100 text-slate-600'
                           }`}>
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                            oi === q.correct ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'
+                            (showAnswers || selectedAnswers[q.id] !== undefined) && oi === q.correct
+                              ? 'border-emerald-500 bg-emerald-500'
+                              : selectedAnswers[q.id] === oi
+                                ? 'border-rose-500 bg-rose-500'
+                                : 'border-slate-300'
                           }`}>
-                            {oi === q.correct && (
+                            {(showAnswers || selectedAnswers[q.id] !== undefined) && oi === q.correct && (
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                               </svg>
                             )}
                           </div>
                           <span>{String.fromCharCode(65 + oi)}. {opt}</span>
-                          {oi === q.correct && <span className="ml-auto text-xs font-semibold text-emerald-600">Correct</span>}
-                        </div>
+                          {(showAnswers || selectedAnswers[q.id] !== undefined) && oi === q.correct && <span className="ml-auto text-xs font-semibold text-emerald-600">Correct</span>}
+                          {selectedAnswers[q.id] === oi && oi !== q.correct && <span className="ml-auto text-xs font-semibold text-rose-600">Try again</span>}
+                        </button>
                       ))}
                     </div>
+
+                    {selectedAnswers[q.id] !== undefined && (
+                      <div className={`mt-3 rounded-xl border px-3 py-2.5 text-xs ${
+                        selectedAnswers[q.id] === q.correct
+                          ? 'bg-emerald-50 border-emerald-100 text-emerald-800'
+                          : 'bg-rose-50 border-rose-100 text-rose-800'
+                      }`}>
+                        <p className="font-bold">{selectedAnswers[q.id] === q.correct ? 'Correct answer' : 'Not quite'}</p>
+                        <p className="mt-1 leading-relaxed">{q.explanation || 'Review the highlighted answer and try again.'}</p>
+                      </div>
+                    )}
 
                     <button onClick={() => setExpanded(expanded === q.id ? null : q.id)}
                       className="mt-3 text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1 transition-colors">
